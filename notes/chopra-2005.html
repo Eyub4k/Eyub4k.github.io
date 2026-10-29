@@ -1,0 +1,881 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script>
+// pick the language before the page renders (no flash): ?lang=fr > saved choice > English
+(function(){var l='en';try{l=new URLSearchParams(location.search).get('lang')||localStorage.getItem('lang')||'en'}catch(e){}document.documentElement.lang=l==='fr'?'fr':'en'})();
+</script>
+<title>Siamese networks & contrastive loss (Chopra, Hadsell & LeCun, 2005) · Eyub Celebioglu</title>
+<meta name="description" content="An illustrated walkthrough of Chopra, Hadsell & LeCun (CVPR 2005), 'Learning a Similarity Metric Discriminatively': siamese networks, energy, collapse, contrastive loss, with an interactive demo and a quiz. English / français.">
+<meta property="og:title" content="Siamese networks & contrastive loss, explained (Chopra, Hadsell & LeCun, 2005)">
+<meta property="og:description" content="Paper notes for students: why learn a distance, why networks collapse without negative pairs, and what the theorem really says. Interactive demo + quiz.">
+<meta property="og:type" content="article">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/contrib/auto-render.min.js"></script>
+<style>
+:root{
+  --bg:#ffffff; --fg:#1d1d1f; --dim:#6b6b70; --faint:#b4b4ba; --line:#e8e8ec;
+  --link:#1f5fae; --accent:#c8372d; --ok:#2a8a57; --soft:#f6f6f8;
+  --serif:"Source Serif 4",Georgia,serif; --mono:"JetBrains Mono",ui-monospace,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html[lang=en] .fr, html[lang=fr] .en{display:none !important}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion: reduce){html{scroll-behavior:auto}}
+body{background:var(--bg);color:var(--fg);font-family:var(--serif);font-size:17.5px;line-height:1.65;-webkit-font-smoothing:antialiased}
+a{color:var(--link);text-decoration:none}
+a:hover{text-decoration:underline}
+.page{max-width:760px;margin:0 auto;padding:28px 24px 80px}
+@media (max-width:520px){.page{padding:20px 16px 64px}body{font-size:16.5px}}
+.mono{font-family:var(--mono)}
+
+/* top bar */
+.top{display:flex;justify-content:space-between;align-items:center;gap:12px;font-size:15px}
+.top .back{color:var(--dim)}
+.lang{display:inline-flex;border:1px solid var(--line);font-family:var(--mono);font-size:12.5px}
+.lang button{border:0;background:none;padding:4px 10px;cursor:pointer;color:var(--dim);font:inherit}
+.lang button[aria-pressed=true]{background:var(--fg);color:#fff}
+
+/* title block */
+.kicker{font-family:var(--mono);font-size:12px;color:var(--dim);letter-spacing:.04em;margin-top:44px;text-transform:uppercase}
+h1{font-weight:600;font-size:31px;line-height:1.22;letter-spacing:-.01em;margin-top:8px}
+.meta{color:var(--dim);margin-top:10px;font-size:16px}
+.meta b{color:var(--fg);font-weight:600}
+.links{margin-top:6px;font-size:15.5px}
+.intro{margin-top:22px;font-style:italic;color:#3a3a3f}
+.sep{color:var(--faint);margin:0 6px}
+
+h2{font-weight:600;font-size:22px;margin:52px 0 14px;padding-bottom:6px;border-bottom:1px solid var(--line);scroll-margin-top:16px}
+h2 .n{font-family:var(--mono);font-size:14px;color:var(--faint);margin-right:8px;font-weight:400}
+h3{font-weight:600;font-size:18px;margin:26px 0 8px}
+p{margin-top:12px}
+ul.list{margin:10px 0 0 22px}
+ul.list li{margin-top:5px}
+b{font-weight:600}
+
+/* boxes */
+.box{margin-top:20px;padding:12px 0 14px;border-top:1px solid var(--fg);border-bottom:1px solid var(--line)}
+.box .t{font-family:var(--mono);font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--dim);margin-bottom:2px}
+.box.warn .t{color:var(--accent)}
+h2 + .box{border-top:0;padding-top:0}
+.box p:first-of-type{margin-top:4px}
+.box ol{margin:6px 0 0 20px}
+.box ol li{margin-top:4px}
+
+/* table of contents */
+.toc{margin-top:30px;font-size:15.5px;columns:2;column-gap:32px}
+@media (max-width:560px){.toc{columns:1}}
+.toc a{display:block;padding:2px 0;color:var(--fg)}
+.toc a:hover{color:var(--link)}
+.toc .n{font-family:var(--mono);font-size:12px;color:var(--faint);display:inline-block;width:24px}
+
+/* math, code, ascii */
+.katex{font-size:1.05em}
+.eq{margin:16px 0;overflow-x:auto;overflow-y:hidden;padding:2px 0}
+pre.ascii{font-family:var(--mono);font-variant-ligatures:none;font-size:13.5px;line-height:1.35;color:var(--fg);background:var(--soft);padding:14px 16px;margin-top:16px;overflow-x:auto}
+pre.ascii b{color:var(--accent);font-weight:500}
+@media (max-width:520px){pre.ascii{font-size:11.5px}}
+
+/* tables */
+.tw{overflow-x:auto;margin-top:16px}
+table{border-collapse:collapse;width:100%;font-size:15px}
+th,td{text-align:left;padding:7px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-weight:600;border-bottom:1.5px solid var(--fg)}
+td.num,th.num{text-align:right;font-family:var(--mono);font-size:13.5px}
+
+figure{margin-top:20px}
+figcaption{font-size:14.5px;color:var(--dim);margin-top:8px}
+
+/* demo */
+.demo{margin-top:20px;border:1px solid var(--line);padding:14px}
+.demo-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media (max-width:620px){.demo-grid{grid-template-columns:1fr}}
+.demo canvas{width:100%;display:block;background:#fcfcfd;border:1px solid var(--line)}
+#emb{aspect-ratio:1}
+#chart{aspect-ratio:1}
+.ctrl{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;margin-top:12px;font-size:15px}
+.btn{font-family:var(--mono);font-size:13px;border:1px solid var(--fg);background:var(--fg);color:#fff;padding:6px 12px;cursor:pointer}
+.btn.ghost{background:none;color:var(--fg)}
+.btn:hover{opacity:.85}
+.ctrl label{cursor:pointer;display:inline-flex;gap:6px;align-items:center}
+.ctrl input{accent-color:var(--fg)}
+.readout{font-family:var(--mono);font-size:12.5px;color:var(--dim);margin-top:10px;line-height:1.7}
+.readout .g{color:var(--link)} .readout .i{color:var(--accent)}
+.legend{font-size:14px;color:var(--dim);margin-top:8px}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--dim);vertical-align:middle;margin:0 2px}
+.ring{display:inline-block;width:10px;height:10px;border-radius:50%;border:1.6px solid var(--dim);vertical-align:middle;margin:0 2px}
+
+#lossplot{width:100%;aspect-ratio:2/1;display:block;border:1px solid var(--line);background:#fcfcfd}
+.seg{display:inline-flex;border:1px solid var(--line);font-family:var(--mono);font-size:12.5px;margin-top:10px}
+.seg button{border:0;background:none;padding:5px 10px;cursor:pointer;color:var(--dim);font:inherit}
+.seg button[aria-pressed=true]{background:var(--fg);color:#fff}
+
+/* timeline */
+.tl{list-style:none;margin-top:14px}
+.tl li{display:grid;grid-template-columns:64px 1fr;gap:16px;padding:9px 0;border-top:1px solid var(--line)}
+.tl li:first-child{border-top:0}
+.tl .y{font-family:var(--mono);font-size:13.5px;color:var(--dim);padding-top:2px}
+.tl .here{color:var(--accent)}
+
+/* quiz */
+.q{margin-top:22px;padding-top:16px;border-top:1px solid var(--line)}
+.q:first-child{border-top:0;padding-top:0}
+.q .qt{font-weight:600}
+.q .qn{font-family:var(--mono);font-size:12.5px;color:var(--faint);margin-right:6px;font-weight:400}
+.opts{margin-top:8px;display:grid;gap:6px}
+.opt{display:flex;gap:10px;align-items:flex-start;padding:7px 10px;border:1px solid var(--line);cursor:pointer;font-size:16px}
+.opt:hover{border-color:var(--faint)}
+.opt input{margin-top:5px;accent-color:var(--fg)}
+.opt.right{border-color:var(--ok);background:#f1f7f3}
+.opt.wrong{border-color:var(--accent);background:#fbf3f2}
+.fb{margin-top:8px;font-size:15px;color:#3a3a3f;display:none}
+.done .fb{display:block}
+.done .opt{cursor:default}
+.quiz-bar{display:flex;gap:12px;align-items:center;margin-top:26px;flex-wrap:wrap}
+.score{font-family:var(--mono);font-size:14px}
+#cat-out{margin-top:20px;display:none;align-items:flex-end;gap:14px;flex-wrap:wrap}
+#cat-out.on{display:flex}
+#cat-out pre{font-family:var(--mono);font-variant-ligatures:none;font-size:15px;line-height:1.25;white-space:pre;margin:0}
+#cat-out pre .hl{color:var(--accent)}
+#cat-out .say{font-family:var(--mono);font-size:15px;color:var(--accent);padding-bottom:58px;min-width:9ch}
+#cat-out .msg{flex-basis:100%;font-size:16px}
+#cat-out.hop pre{animation:hop .3s ease-in-out 6 alternate}
+@keyframes hop{to{transform:translateY(-6px)}}
+@media (prefers-reduced-motion: reduce){#cat-out.hop pre{animation:none}}
+
+.refs{font-size:15px}
+.refs li{margin-top:6px}
+.cite{font-family:var(--mono);font-size:12px;white-space:pre-wrap;background:var(--soft);padding:12px 14px;margin-top:10px;color:#3a3a3f;overflow-x:auto}
+
+footer{margin-top:64px;padding-top:16px;border-top:1px solid var(--line);font-size:14px;color:var(--dim);display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+footer .mono{font-size:12px;color:var(--faint)}
+</style>
+</head>
+<body>
+<div class="page">
+
+<nav class="top">
+  <a class="back" href="../">← Eyub Celebioglu</a>
+  <div class="lang" role="group" aria-label="Language">
+    <button type="button" data-l="en">EN</button><button type="button" data-l="fr">FR</button>
+  </div>
+</nav>
+
+<div class="kicker"><span class="en">Paper notes · for students</span><span class="fr">Notes de lecture · pour étudiants</span></div>
+<h1>Learning a Similarity Metric Discriminatively, with Application to Face Verification</h1>
+<div class="meta"><b>Sumit Chopra, Raia Hadsell, Yann LeCun</b> · CVPR 2005 · New York University</div>
+<div class="links">
+  <a href="http://yann.lecun.com/exdb/publis/pdf/chopra-05.pdf" target="_blank" rel="noopener"><span class="en">paper (PDF)</span><span class="fr">article (PDF)</span></a><span class="sep">/</span><a href="https://doi.org/10.1109/CVPR.2005.202" target="_blank" rel="noopener">IEEE</a><span class="sep">/</span><span class="mono" style="font-size:13px;color:var(--dim)"><span class="en">~20 min read · interactive demo · quiz</span><span class="fr">~20 min de lecture · démo interactive · quiz</span></span>
+</div>
+
+<p class="intro en">I wrote these notes while preparing for an exam on this paper, in my Master's course on contrastive learning. I tried to keep what really matters to understand it, and to explain the maths in plain words. If it helps you too, great.</p>
+<p class="intro fr">J'ai écrit ces notes en préparant un examen sur cet article, dans mon cours de Master sur l'apprentissage contrastif. J'ai essayé de garder ce qui compte vraiment pour le comprendre, et d'expliquer les maths avec des mots simples. Si ça peut vous aider aussi, tant mieux.</p>
+
+<div class="box">
+  <div class="t"><span class="en">The paper in 5 sentences</span><span class="fr">L'article en 5 phrases</span></div>
+  <ol class="en">
+    <li>Instead of learning to <b>classify</b> people, learn a <b>distance</b> between images.</li>
+    <li>One network \(G_W\) (a CNN, applied twice with the <b>same weights</b>: a <b>siamese</b> architecture) maps each image to a vector; the <b>energy</b> \(E_W\) is the distance between the two vectors.</li>
+    <li>Pairs of the same person (<b>genuine</b>) should get a small energy, pairs of different people (<b>impostor</b>) a large one.</li>
+    <li>Without impostor pairs, the network cheats by sending every image to the same point: the <b>collapse</b>. A <b>contrastive term</b> prevents it.</li>
+    <li>Testing is done on <b>people never seen during training</b>: the learned distance generalizes to new people.</li>
+  </ol>
+  <ol class="fr">
+    <li>Au lieu d'apprendre à <b>classer</b> les personnes, on apprend une <b>distance</b> entre images.</li>
+    <li>Un seul réseau \(G_W\) (un CNN, appliqué deux fois avec les <b>mêmes poids</b> : architecture <b>siamoise</b>) transforme chaque image en vecteur ; l'<b>énergie</b> \(E_W\) est la distance entre les deux vecteurs.</li>
+    <li>Une paire de la même personne (<b>genuine</b>) doit avoir une énergie petite, une paire de deux personnes différentes (<b>impostor</b>) une énergie grande.</li>
+    <li>Sans paires impostor, le réseau triche en envoyant toutes les images au même point : c'est le <b>collapse</b>. Un <b>terme contrastif</b> l'en empêche.</li>
+    <li>Le test se fait sur des <b>personnes jamais vues à l'entraînement</b> : la distance apprise se généralise à de nouvelles personnes.</li>
+  </ol>
+</div>
+
+<nav class="toc" aria-label="Contents">
+  <a href="#problem"><span class="n">01</span><span class="en">The problem</span><span class="fr">Le problème</span></a>
+  <a href="#idea"><span class="n">02</span><span class="en">Learn a distance: siamese networks</span><span class="fr">Apprendre une distance : le siamois</span></a>
+  <a href="#collapse"><span class="n">03</span><span class="en">The collapse</span><span class="fr">Le collapse</span></a>
+  <a href="#demo"><span class="n">04</span><span class="en">Try it: interactive demo</span><span class="fr">Démo interactive</span></a>
+  <a href="#loss"><span class="n">05</span><span class="en">Margin and contrastive loss</span><span class="fr">Marge et loss contrastive</span></a>
+  <a href="#theorem"><span class="n">06</span><span class="en">What Theorem 1 really says</span><span class="fr">Ce que dit vraiment le théorème 1</span></a>
+  <a href="#details"><span class="n">07</span><span class="en">Two design details</span><span class="fr">Deux détails de conception</span></a>
+  <a href="#cnn"><span class="n">08</span><span class="en">The network \(G_W\)</span><span class="fr">Le réseau \(G_W\)</span></a>
+  <a href="#data"><span class="n">09</span><span class="en">Data and protocol</span><span class="fr">Données et protocole</span></a>
+  <a href="#results"><span class="n">10</span><span class="en">Results</span><span class="fr">Résultats</span></a>
+  <a href="#limits"><span class="n">11</span><span class="en">Critical reading</span><span class="fr">Lecture critique</span></a>
+  <a href="#next"><span class="n">12</span><span class="en">What came next</span><span class="fr">Ce qui a suivi</span></a>
+  <a href="#quiz"><span class="n">13</span><span class="en">Quiz</span><span class="fr">Quiz</span></a>
+</nav>
+
+<!-- ======================================================= 1 -->
+<h2 id="problem"><span class="n">01</span><span class="en">The problem</span><span class="fr">Le problème</span></h2>
+<div class="en">
+<p>A standard classifier (say, a CNN ending with a softmax) has <b>one output neuron per class</b>. That works for handwritten digits, but it silently assumes three things:</p>
+<ul class="list">
+  <li>all classes are <b>known in advance</b>;</li>
+  <li>there are <b>many examples per class</b>;</li>
+  <li>the number of classes is <b>limited</b> (the paper says on the order of 100).</li>
+</ul>
+<p>Face verification breaks all three: thousands of people, only a few photos of each, and <b>new people</b> showing up after training. A classifier answering "is this Eyub, yes or no?" would need one model per person, retrained every time someone joins.</p>
+<p>The trick is to <b>change the question</b>. Instead of "who is this?", ask "<b>do these two photos show the same person?</b>". That question is the same for everybody, so a single model can answer it, even for people it has never seen.</p>
+</div>
+<div class="fr">
+<p>Un classifieur classique (par exemple un CNN terminé par un softmax) a <b>un neurone de sortie par classe</b>. Ça marche pour les chiffres manuscrits, mais ça suppose trois choses :</p>
+<ul class="list">
+  <li>toutes les classes sont <b>connues à l'avance</b> ;</li>
+  <li>il y a <b>beaucoup d'exemples par classe</b> ;</li>
+  <li>le nombre de classes est <b>limité</b> (de l'ordre de 100 d'après l'article).</li>
+</ul>
+<p>La vérification de visages casse les trois : des milliers de personnes, peu de photos par personne, et des <b>personnes nouvelles</b> après l'entraînement. Un classifieur « est-ce Eyub, oui ou non ? » demanderait un modèle par personne, réentraîné à chaque nouvelle arrivée.</p>
+<p>L'astuce : <b>changer la question</b>. Au lieu de « qui est-ce ? », on demande « <b>ces deux photos montrent-elles la même personne ?</b> ». Cette question est la même pour tout le monde : un seul modèle peut y répondre, même pour des personnes qu'il n'a jamais vues.</p>
+</div>
+<div class="box">
+  <p class="en"><b>Verification</b> = accept or reject a <i>claimed</i> identity (compare with one person). <b>Identification</b> = find who it is among everybody. This paper does verification.</p>
+  <p class="fr"><b>Vérification</b> = accepter ou refuser une identité <i>annoncée</i> (comparer à une seule personne). <b>Identification</b> = trouver qui c'est parmi toutes les personnes. L'article fait de la vérification.</p>
+</div>
+
+<!-- ======================================================= 2 -->
+<h2 id="idea"><span class="n">02</span><span class="en">Learn a distance: siamese networks</span><span class="fr">Apprendre une distance : le réseau siamois</span></h2>
+<p class="en">The authors train a function \(G_W\), a convolutional network with weights \(W\), that maps an image to a point in a small space (50 dimensions). The distance between two points is called the <b>energy</b>:</p>
+<p class="fr">Les auteurs entraînent une fonction \(G_W\), un réseau convolutif de poids \(W\), qui envoie une image vers un point d'un petit espace (50 dimensions). La distance entre deux points s'appelle l'<b>énergie</b> :</p>
+<div class="eq">\[ E_W(X_1, X_2) = \big\lVert G_W(X_1) - G_W(X_2) \big\rVert_1 \]</div>
+<p class="en">(the abstract specifies the \(L_1\) norm). The goal: <b>small energy</b> for a genuine pair, <b>large energy</b> for an impostor pair.</p>
+<p class="fr">(le résumé précise qu'il s'agit de la norme \(L_1\)). Objectif : <b>énergie petite</b> pour une paire genuine, <b>énergie grande</b> pour une paire impostor.</p>
+<pre class="ascii en" aria-label="Siamese architecture diagram">
+ X₁ ──▶ ┌────────┐ ──▶ G_W(X₁) ──┐
+        │  G_W   │               │
+        └────────┘               ├──▶  ‖ G_W(X₁) − G_W(X₂) ‖  ──▶  <b>E_W</b>
+            ▲ <b>same weights W</b>        │
+ X₂ ──▶ ┌────────┐               │
+        │  G_W   │ ──▶ G_W(X₂) ──┘
+        └────────┘</pre>
+<pre class="ascii fr" aria-label="Siamese architecture diagram">
+ X₁ ──▶ ┌────────┐ ──▶ G_W(X₁) ──┐
+        │  G_W   │               │
+        └────────┘               ├──▶  ‖ G_W(X₁) − G_W(X₂) ‖  ──▶  <b>E_W</b>
+            ▲ <b>mêmes poids W</b>          │
+ X₂ ──▶ ┌────────┐               │
+        │  G_W   │ ──▶ G_W(X₂) ──┘
+        └────────┘</pre>
+<div class="en">
+<p><b>Siamese = one network used twice.</b> The diagram shows two branches, but they share the same weights \(W\); in code you simply call the same network on both images. Why share?</p>
+<ul class="list">
+  <li>both images land in the <b>same space</b>, otherwise comparing them would be meaningless;</li>
+  <li>the energy is <b>symmetric</b>: \(E(A,B) = E(B,A)\).</li>
+</ul>
+<p>The siamese idea itself comes from Bromley et al. (1993, signature verification). The novelty here is the <b>loss</b>, derived from <b>energy-based models</b> (EBM): \(E_W\) is an unnormalized score, not a probability. No partition function to compute, and total freedom on the architecture of \(G_W\). The only requirement is that it is differentiable with respect to \(W\), so we can backpropagate.</p>
+</div>
+<div class="fr">
+<p><b>Siamois = un seul réseau utilisé deux fois.</b> Le schéma montre deux branches, mais elles partagent les mêmes poids \(W\) ; dans le code, on appelle simplement le même réseau sur les deux images. Pourquoi partager ?</p>
+<ul class="list">
+  <li>les deux images arrivent dans le <b>même espace</b>, sinon les comparer n'aurait aucun sens ;</li>
+  <li>l'énergie est <b>symétrique</b> : \(E(A,B) = E(B,A)\).</li>
+</ul>
+<p>L'idée du siamois vient de Bromley et al. (1993, vérification de signatures). La nouveauté ici, c'est la <b>loss</b>, issue des <b>modèles à énergie</b> (EBM) : \(E_W\) est un score non normalisé, pas une probabilité. Pas de fonction de partition à calculer, et liberté totale sur l'architecture de \(G_W\). Seule exigence : qu'il soit dérivable par rapport à \(W\), pour la rétropropagation.</p>
+</div>
+
+<!-- ======================================================= 3 -->
+<h2 id="collapse"><span class="n">03</span><span class="en">The collapse: why we need impostor pairs</span><span class="fr">Le collapse : pourquoi il faut des paires impostor</span></h2>
+<div class="box warn">
+  <div class="t"><span class="en">The key idea of the paper</span><span class="fr">L'idée clé de l'article</span></div>
+  <p class="en">First idea: just minimize \(E_W\) on genuine pairs. It fails catastrophically. The network can make \(G_W\) <b>constant</b>: every image goes to the same point, every distance is 0, the loss is 0… and the network can no longer tell anyone apart. This is the <b>collapse</b>.</p>
+  <p class="fr">Première idée : minimiser \(E_W\) seulement sur les paires genuine. Échec total. Le réseau peut rendre \(G_W\) <b>constante</b> : toutes les images vont au même point, toutes les distances valent 0, la loss vaut 0… et le réseau ne distingue plus personne. C'est le <b>collapse</b>.</p>
+  <p class="en">The fix is a <b>contrastive term</b> that penalizes impostor pairs that are too close. The network can no longer squash everything onto one point.</p>
+  <p class="fr">La solution : un <b>terme contrastif</b> qui pénalise les paires impostor trop proches. Le réseau ne peut plus tout écraser sur un point.</p>
+</div>
+<p class="en">Why don't probabilistic models have this problem? Because probabilities <b>sum to 1</b>: making one pair more probable automatically makes the others less probable. Energies have no such constraint, so the loss itself must push some energies <b>up</b>.</p>
+<p class="fr">Pourquoi les modèles probabilistes n'ont-ils pas ce problème ? Parce que les probabilités <b>somment à 1</b> : rendre une paire plus probable rend automatiquement les autres moins probables. Les énergies n'ont pas cette contrainte, donc c'est la loss elle-même qui doit faire <b>monter</b> certaines énergies.</p>
+
+<!-- ======================================================= 4 -->
+<h2 id="demo"><span class="n">04</span><span class="en">Try it: train a siamese model live</span><span class="fr">À vous : entraînez un modèle siamois en direct</span></h2>
+<p class="en">Each dot is a "photo" mapped by \(G_W\) into 2D; each colour is a person. Photos of the same person differ by random "lighting" and "pose" factors that the model must learn to <b>ignore</b>. Watch the colours separate, then <b>untick "impostor pairs"</b> and watch the collapse.</p>
+<p class="fr">Chaque point est une « photo » placée en 2D par \(G_W\) ; chaque couleur est une personne. Les photos d'une même personne diffèrent par un « éclairage » et une « pose » aléatoires que le modèle doit apprendre à <b>ignorer</b>. Regardez les couleurs se séparer, puis <b>décochez « paires impostor »</b> pour voir le collapse.</p>
+<div class="demo">
+  <div class="demo-grid">
+    <figure style="margin:0"><canvas id="emb" aria-label="Embedding space: points coloured by person"></canvas>
+      <figcaption><span class="en">Output space of \(G_W\)</span><span class="fr">Espace de sortie de \(G_W\)</span></figcaption></figure>
+    <figure style="margin:0"><canvas id="chart" aria-label="Average genuine and impostor distances over training"></canvas>
+      <figcaption><span class="en">Average distance during training</span><span class="fr">Distance moyenne pendant l'entraînement</span></figcaption></figure>
+  </div>
+  <div class="ctrl">
+    <button class="btn" id="play" type="button"></button>
+    <button class="btn ghost" id="reset" type="button"><span class="en">New run</span><span class="fr">Nouvel essai</span></button>
+    <label><input type="checkbox" id="contr" checked> <span class="en">impostor pairs (contrastive term)</span><span class="fr">paires impostor (terme contrastif)</span></label>
+    <label><input type="checkbox" id="unseen"> <span class="en">show people never seen in training</span><span class="fr">montrer des personnes jamais vues</span></label>
+  </div>
+  <div class="readout" id="readout"></div>
+  <div class="legend">
+    <span class="en"><span class="dot"></span> one photo · one colour = one person · <span class="ring"></span> person never used for training</span>
+    <span class="fr"><span class="dot"></span> une photo · une couleur = une personne · <span class="ring"></span> personne jamais utilisée à l'entraînement</span>
+  </div>
+</div>
+<p class="en" style="font-size:15px;color:var(--dim)">To run in your browser, \(G_W\) here is a linear map from 8 to 2 dimensions (not a CNN), trained by gradient descent on balanced genuine/impostor pairs with the 2006 form of the contrastive loss (margin \(m = 1.5\), see section 05). The phenomenon is the same as in the paper.</p>
+<p class="fr" style="font-size:15px;color:var(--dim)">Pour tourner dans le navigateur, \(G_W\) est ici une application linéaire de 8 vers 2 dimensions (pas un CNN), entraînée par descente de gradient sur des paires genuine/impostor équilibrées, avec la forme 2006 de la loss contrastive (marge \(m = 1{,}5\), voir section 05). Le phénomène est le même que dans l'article.</p>
+
+<!-- ======================================================= 5 -->
+<h2 id="loss"><span class="n">05</span><span class="en">The margin and the contrastive loss</span><span class="fr">La marge et la loss contrastive</span></h2>
+<p class="en">What we want, written as a condition: there is a margin \(m > 0\) such that, for a genuine pair \((X_1,X_2)\) and an impostor pair \((X_1,X_2')\),</p>
+<p class="fr">Ce qu'on veut, écrit comme une condition : il existe une marge \(m > 0\) telle que, pour une paire genuine \((X_1,X_2)\) et une paire impostor \((X_1,X_2')\),</p>
+<div class="eq">\[ \textbf{Condition 1:}\quad E_W(X_1,X_2) + m \;<\; E_W(X_1,X_2') \qquad\text{i.e.}\qquad E_W^G + m < E_W^I \]</div>
+<p class="en">A genuine pair must always be closer than an impostor pair, by at least \(m\). The loss is written with a label \(Y\). Careful with the convention: <b>\(Y = 0\) for a genuine pair, \(Y = 1\) for an impostor pair.</b></p>
+<p class="fr">Une paire genuine doit toujours être plus proche qu'une paire impostor, d'au moins \(m\). La loss s'écrit avec une étiquette \(Y\). Attention à la convention : <b>\(Y = 0\) pour une paire genuine, \(Y = 1\) pour une paire impostor.</b></p>
+<div class="eq">\[ L(W, Y, X_1, X_2) = (1-Y)\, L_G(E_W) + Y\, L_I(E_W) \]</div>
+<ul class="list en">
+  <li>\(L_G\) is <b>increasing</b> in \(E\): it punishes genuine pairs that are <b>too far apart</b>.</li>
+  <li>\(L_I\) is <b>decreasing</b> in \(E\): it punishes impostor pairs that are <b>too close</b>.</li>
+</ul>
+<ul class="list fr">
+  <li>\(L_G\) est <b>croissante</b> en \(E\) : elle punit les paires genuine <b>trop éloignées</b>.</li>
+  <li>\(L_I\) est <b>décroissante</b> en \(E\) : elle punit les paires impostor <b>trop proches</b>.</li>
+</ul>
+<h3><span class="en">Two versions to know</span><span class="fr">Deux versions à connaître</span></h3>
+<div class="tw"><table>
+  <tr><th><span class="en">Version</span><span class="fr">Version</span></th><th><span class="en">Loss</span><span class="fr">Loss</span></th></tr>
+  <tr><td><b>2005</b><br><span class="en">this paper, eq. 9</span><span class="fr">cet article, éq. 9</span></td><td>\( (1-Y)\,\dfrac{2}{Q}\,E_W^2 \;+\; Y\, 2Q\, e^{-2.77\,E_W/Q} \)<br><span style="font-size:14px;color:var(--dim)"><span class="en">\(Q\) = upper bound of \(E_W\) (the outputs of \(G_W\) are bounded)</span><span class="fr">\(Q\) = borne supérieure de \(E_W\) (les sorties de \(G_W\) sont bornées)</span></span></td></tr>
+  <tr><td><b>2006</b><br>Hadsell, Chopra &amp; LeCun</td><td>\( (1-Y)\,\tfrac12 D^2 \;+\; Y\,\tfrac12 \max(0,\, m - D)^2 \)<br><span style="font-size:14px;color:var(--dim)"><span class="en">\(D\) = Euclidean distance, \(m\) = margin. Impostors farther than \(m\) cost nothing.</span><span class="fr">\(D\) = distance euclidienne, \(m\) = marge. Les impostors plus loin que \(m\) ne coûtent rien.</span></span></td></tr>
+</table></div>
+<p class="en">The 2005 loss is the authors' own creation; the simpler 2006 version became <b>"the" contrastive loss</b> you find in PyTorch tutorials. Compare their shapes:</p>
+<p class="fr">La loss de 2005 est une création des auteurs ; la version 2006, plus simple, est devenue <b>« la » loss contrastive</b> des tutoriels PyTorch. Comparez leurs formes :</p>
+<figure>
+  <canvas id="lossplot" aria-label="Plot of the genuine and impostor partial losses as a function of the energy"></canvas>
+  <div class="seg" role="group" aria-label="Loss version"><button type="button" data-v="2005" aria-pressed="true">2005</button><button type="button" data-v="2006" aria-pressed="false">2006</button></div>
+  <figcaption><span class="en"><span style="color:var(--link)">■</span> \(L_G\), genuine pairs · <span style="color:var(--accent)">■</span> \(L_I\), impostor pairs · horizontal axis: energy \(E\)</span><span class="fr"><span style="color:var(--link)">■</span> \(L_G\), paires genuine · <span style="color:var(--accent)">■</span> \(L_I\), paires impostor · axe horizontal : énergie \(E\)</span></figcaption>
+</figure>
+<div class="box warn">
+  <div class="t"><span class="en">Classic trap</span><span class="fr">Piège classique</span></div>
+  <p class="en">"Increasing" describes the <b>shape</b> of the curve, not what happens during training. During training <b>both terms go down</b>: genuine energies decrease (we slide left on the blue curve) and impostor energies increase (we slide right on the red one). Bonus: the worse a pair is placed, the steeper the slope, so the faster it gets corrected.</p>
+  <p class="fr">« Croissante » décrit la <b>forme</b> de la courbe, pas ce qui se passe à l'entraînement. Pendant l'entraînement, <b>les deux termes baissent</b> : les énergies genuine diminuent (on glisse vers la gauche sur la courbe bleue) et les énergies impostor augmentent (on glisse vers la droite sur la rouge). Bonus : plus une paire est mal placée, plus la pente est forte, donc plus elle est corrigée vite.</p>
+</div>
+
+<!-- ======================================================= 6 -->
+<h2 id="theorem"><span class="n">06</span><span class="en">What Theorem 1 really says</span><span class="fr">Ce que dit vraiment le théorème 1</span></h2>
+<p class="en">Does minimizing this loss actually lead to Condition 1? Take one genuine pair (energy \(E_G\)) and one impostor pair (energy \(E_I\)), and look at their total loss</p>
+<p class="fr">Minimiser cette loss mène-t-il vraiment à la condition 1 ? Prenons une paire genuine (énergie \(E_G\)) et une paire impostor (énergie \(E_I\)), et regardons leur loss totale</p>
+<div class="eq">\[ H(E_G, E_I) = L_G(E_G) + L_I(E_I) \]</div>
+<figure>
+<svg viewBox="0 0 520 300" width="100%" role="img" aria-label="The (E_G, E_I) plane split by the margin line into a good and a bad half-plane">
+  <defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#c8372d"/></marker>
+  <marker id="ax" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#1d1d1f"/></marker></defs>
+  <polygon points="60,200 60,20 240,20" fill="#f1f7f3"/>
+  <polygon points="60,200 240,20 500,20 500,260 60,260" fill="#fbf3f2"/>
+  <line x1="60" y1="260" x2="505" y2="260" stroke="#1d1d1f" stroke-width="1.2" marker-end="url(#ax)"/>
+  <line x1="60" y1="260" x2="60" y2="12" stroke="#1d1d1f" stroke-width="1.2" marker-end="url(#ax)"/>
+  <line x1="60" y1="200" x2="240" y2="20" stroke="#1d1d1f" stroke-width="1.6"/>
+  <line x1="60" y1="260" x2="300" y2="20" stroke="#b4b4ba" stroke-width="1" stroke-dasharray="4 4"/>
+  <text x="44" y="204" font-family="JetBrains Mono" font-size="12" fill="#6b6b70">m</text>
+  <line x1="150" y1="110" x2="118" y2="78" stroke="#c8372d" stroke-width="2" marker-end="url(#ar)"/>
+  <circle cx="150" cy="110" r="3.5" fill="#1d1d1f"/>
+  <text x="490" y="282" text-anchor="end" font-family="JetBrains Mono" font-size="13" fill="#1d1d1f">E_G</text>
+  <text x="20" y="22" font-family="JetBrains Mono" font-size="13" fill="#1d1d1f">E_I</text>
+  <text x="246" y="18" font-family="JetBrains Mono" font-size="11.5" fill="#1d1d1f">E_G + m = E_I</text>
+  <text class="en" x="68" y="38" font-family="Source Serif 4, Georgia" font-size="13" fill="#2a8a57"><tspan x="68">good zone:</tspan><tspan x="68" dy="16">condition 1 holds</tspan></text>
+  <text class="fr" x="68" y="38" font-family="Source Serif 4, Georgia" font-size="13" fill="#2a8a57"><tspan x="68">zone bonne :</tspan><tspan x="68" dy="16">condition 1 OK</tspan></text>
+  <text class="en" x="300" y="200" font-family="Source Serif 4, Georgia" font-size="14" fill="#c8372d">bad zone</text>
+  <text class="fr" x="300" y="200" font-family="Source Serif 4, Georgia" font-size="14" fill="#c8372d">zone mauvaise</text>
+  <text class="en" x="160" y="128" font-family="Source Serif 4, Georgia" font-size="13" fill="#c8372d">−∇H points to the good zone</text>
+  <text class="fr" x="160" y="128" font-family="Source Serif 4, Georgia" font-size="13" fill="#c8372d">−∇H pointe vers la zone bonne</text>
+  <text class="en" x="330" y="228" font-family="Source Serif 4, Georgia" font-size="12" fill="#6b6b70"><tspan x="330">dashed: E_G = E_I</tspan><tspan x="330" dy="15">(collapse = the origin)</tspan></text>
+  <text class="fr" x="330" y="228" font-family="Source Serif 4, Georgia" font-size="12" fill="#6b6b70"><tspan x="330">pointillés : E_G = E_I</tspan><tspan x="330" dy="15">(collapse = l'origine)</tspan></text>
+</svg>
+<figcaption><span class="en">The \((E_G, E_I)\) plane, redrawn from figure 3 of the paper. The margin line splits it into a good and a bad half-plane.</span><span class="fr">Le plan \((E_G, E_I)\), redessiné d'après la figure 3 de l'article. La ligne de marge le coupe en une zone bonne et une zone mauvaise.</span></figcaption>
+</figure>
+<div class="en">
+<p><b>Assumptions:</b> \(H\) is convex in \((E_G, E_I)\), and at least one \(W\) satisfies Condition 1.</p>
+<p><b>Condition 3:</b> on the margin line, \(-\nabla H\) points into the good zone, i.e. it has a positive dot product with \((-1, 1)\): lower \(E_G\), raise \(E_I\). This is <b>automatic</b> as soon as \(L_G\) is increasing and \(L_I\) is decreasing.</p>
+<p><b>Theorem 1:</b> under these assumptions, minimizing \(H\) leads to a \(W\) that satisfies Condition 1. Proof idea in three steps:</p>
+<ol class="list" style="margin-left:22px">
+  <li>take the best point on the margin line;</li>
+  <li>by convexity, every point of the bad zone has a loss at least as large;</li>
+  <li>a small step from that point into the good zone lowers the loss (first-order Taylor expansion + Condition 3).</li>
+</ol>
+<p>So the minimum is in the good zone.</p>
+</div>
+<div class="fr">
+<p><b>Hypothèses :</b> \(H\) est convexe en \((E_G, E_I)\), et au moins un \(W\) vérifie la condition 1.</p>
+<p><b>Condition 3 :</b> sur la ligne de marge, \(-\nabla H\) pointe vers la zone bonne, c'est-à-dire qu'il a un produit scalaire positif avec \((-1, 1)\) : baisser \(E_G\), monter \(E_I\). C'est <b>automatique</b> dès que \(L_G\) est croissante et \(L_I\) décroissante.</p>
+<p><b>Théorème 1 :</b> sous ces hypothèses, minimiser \(H\) mène à un \(W\) qui vérifie la condition 1. Idée de la preuve en trois étapes :</p>
+<ol class="list" style="margin-left:22px">
+  <li>on prend le meilleur point sur la ligne de marge ;</li>
+  <li>par convexité, tout point de la zone mauvaise a une loss au moins aussi grande ;</li>
+  <li>un petit pas depuis ce point vers la zone bonne fait baisser la loss (développement de Taylor à l'ordre 1 + condition 3).</li>
+</ol>
+<p>Donc le minimum est dans la zone bonne.</p>
+</div>
+<div class="box warn">
+  <div class="t"><span class="en">What the theorem does not say</span><span class="fr">Ce que le théorème ne dit pas</span></div>
+  <p class="en">"Convex" means bowl-shaped with no fake valleys, not "always decreasing". And \(H\) is convex in the <b>energies</b> \((E_G, E_I)\), <b>not in the weights \(W\)</b>. Gradient descent on the weights of a CNN has no guarantee of reaching that minimum. The theorem only says the loss <b>pushes in the right direction</b>.</p>
+  <p class="fr">« Convexe » veut dire en forme de bol sans faux creux, pas « qui baisse toujours ». Et \(H\) est convexe en les <b>énergies</b> \((E_G, E_I)\), <b>pas en les poids \(W\)</b>. La descente de gradient sur les poids d'un CNN n'a aucune garantie d'atteindre ce minimum. Le théorème dit seulement que la loss <b>pousse dans la bonne direction</b>.</p>
+</div>
+
+<!-- ======================================================= 7 -->
+<h2 id="details"><span class="n">07</span><span class="en">Two design details</span><span class="fr">Deux détails de conception</span></h2>
+<div class="en">
+<p><b>The strange constants</b> (\(2/Q\), \(2Q\), \(2.77\)) are chosen so that the negative gradient always points <b>inside the feasible region</b> (the energies the network can actually reach). Otherwise the optimizer could get stuck on the border of that region, with the gradient pointing outside, and mistake it for a local minimum.</p>
+<p><b>Norm, not squared norm.</b> With a squared norm, the gradient vanishes when the two outputs are close (like \(x^2\) near 0). An impostor pair that the network confuses (energy ≈ 0) would then barely be pushed apart: a <b>plateau</b> where learning stalls. The plain \(L_1\) norm keeps a non-zero slope. (The 2006 loss avoids the plateau differently: \(\max(0, m - D)^2\) has its steepest slope at \(D = 0\).)</p>
+</div>
+<div class="fr">
+<p><b>Les constantes bizarres</b> (\(2/Q\), \(2Q\), \(2{,}77\)) sont choisies pour que le gradient négatif pointe toujours <b>à l'intérieur de la région atteignable</b> (les énergies que le réseau peut vraiment produire). Sinon l'optimiseur pourrait se bloquer sur le bord de cette région, gradient pointant vers l'extérieur, et croire à un minimum local.</p>
+<p><b>Norme, pas norme au carré.</b> Avec une norme au carré, le gradient s'annule quand les deux sorties sont proches (comme \(x^2\) près de 0). Une paire impostor que le réseau confond (énergie ≈ 0) ne serait alors presque plus repoussée : un <b>plateau</b> où l'apprentissage bloque. La norme \(L_1\) simple garde une pente non nulle. (La loss de 2006 évite le plateau autrement : \(\max(0, m - D)^2\) a sa pente maximale en \(D = 0\).)</p>
+</div>
+
+<!-- ======================================================= 8 -->
+<h2 id="cnn"><span class="n">08</span><span class="en">The network \(G_W\)</span><span class="fr">Le réseau \(G_W\)</span></h2>
+<p class="en">A small LeNet-style CNN. Notation: C = convolution, S = subsampling, F = fully connected; the digit is the layer index. No need to memorize the sizes.</p>
+<p class="fr">Un petit CNN dans le style de LeNet. Notation : C = convolution, S = sous-échantillonnage, F = entièrement connectée ; le chiffre est l'indice de la couche. Pas besoin de retenir les tailles.</p>
+<div class="tw"><table>
+  <tr><th><span class="en">Layer</span><span class="fr">Couche</span></th><th><span class="en">Operation</span><span class="fr">Opération</span></th><th class="num"><span class="en">Output</span><span class="fr">Sortie</span></th></tr>
+  <tr><td><span class="en">input</span><span class="fr">entrée</span></td><td><span class="en">grayscale face</span><span class="fr">visage en niveaux de gris</span></td><td class="num">1 × 56 × 46</td></tr>
+  <tr><td>C1</td><td><span class="en">15 filters 7 × 7</span><span class="fr">15 filtres 7 × 7</span></td><td class="num">15 × 50 × 40</td></tr>
+  <tr><td>S2</td><td><span class="en">subsampling 2 × 2</span><span class="fr">sous-échantillonnage 2 × 2</span></td><td class="num">15 × 25 × 20</td></tr>
+  <tr><td>C3</td><td><span class="en">45 filters 6 × 6, partially connected (to break symmetry)</span><span class="fr">45 filtres 6 × 6, partiellement connectée (casser la symétrie)</span></td><td class="num">45 × 20 × 15</td></tr>
+  <tr><td>S4</td><td><span class="en">subsampling 4 × 3</span><span class="fr">sous-échantillonnage 4 × 3</span></td><td class="num">45 × 5 × 5</td></tr>
+  <tr><td>C5</td><td><span class="en">250 filters 5 × 5</span><span class="fr">250 filtres 5 × 5</span></td><td class="num">250 × 1 × 1</td></tr>
+  <tr><td>F6</td><td><span class="en">fully connected</span><span class="fr">entièrement connectée</span></td><td class="num"><span class="en">vector of 50</span><span class="fr">vecteur de 50</span></td></tr>
+</table></div>
+<div class="en">
+<p><b>Why a CNN?</b> Its local filters are shared and slide over the image, so it is naturally robust to shifts and small distortions (pose, position, scale). Older methods like Eigenfaces (PCA) or Fisherfaces (LDA) are linear and break as soon as the face is shifted; others hand-design their invariances. Here the invariances are <b>learned from data</b>.</p>
+<p>A CNN has no loss "of its own": the loss plugged behind it defines what it learns. Here it is trained <b>end-to-end</b> by the contrastive loss, with random initialization, stochastic gradient descent and backpropagation. The gradients of the two branches are <b>summed</b> on the shared weights.</p>
+</div>
+<div class="fr">
+<p><b>Pourquoi un CNN ?</b> Ses filtres locaux sont partagés et glissent sur l'image : il est naturellement robuste aux décalages et petites déformations (pose, position, échelle). Les méthodes plus anciennes comme Eigenfaces (ACP) ou Fisherfaces (ADL) sont linéaires et cassent dès que le visage est décalé ; d'autres codent leurs invariances à la main. Ici, les invariances sont <b>apprises à partir des données</b>.</p>
+<p>Un CNN n'a pas de loss « à lui » : c'est la loss branchée derrière qui définit ce qu'il apprend. Ici, il est entraîné <b>de bout en bout</b> par la loss contrastive, avec initialisation aléatoire, descente de gradient stochastique et rétropropagation. Les gradients des deux branches sont <b>additionnés</b> sur les poids partagés.</p>
+</div>
+
+<!-- ======================================================= 9 -->
+<h2 id="data"><span class="n">09</span><span class="en">Data and protocol</span><span class="fr">Données et protocole</span></h2>
+<div class="tw"><table>
+  <tr><th><span class="en">Dataset</span><span class="fr">Base</span></th><th><span class="en">Content</span><span class="fr">Contenu</span></th><th><span class="en">Role</span><span class="fr">Rôle</span></th></tr>
+  <tr><td>AT&amp;T</td><td><span class="en">400 images, 40 people × 10 (lighting, expression, glasses, pose)</span><span class="fr">400 images, 40 personnes × 10 (lumière, expression, lunettes, pose)</span></td><td><span class="en">35 people train, 5 test</span><span class="fr">35 personnes entraînement, 5 test</span></td></tr>
+  <tr><td>AR (Purdue)</td><td><span class="en">3,536 images, 136 people, sunglasses and scarves: very hard</span><span class="fr">3 536 images, 136 personnes, lunettes de soleil et écharpes : très difficile</span></td><td><span class="en">96 people train, 40 test</span><span class="fr">96 personnes entraînement, 40 test</span></td></tr>
+  <tr><td>FERET</td><td><span class="en">1,122 images, 187 people (subset)</span><span class="fr">1 122 images, 187 personnes (sous-ensemble)</span></td><td><span class="en">training only</span><span class="fr">entraînement seulement</span></td></tr>
+</table></div>
+<ul class="list en">
+  <li><b>Test people ≠ training people.</b> That is the whole point: it shows the metric generalizes to new categories.</li>
+  <li><b>Balanced pairs.</b> On AR/FERET there are naturally about 155 times more impostor pairs than genuine pairs (11,096,376 vs 71,628). The training set uses 140,000 pairs split <b>50/50</b>; otherwise the network would spend its time pushing apart and learn badly how to pull together.</li>
+  <li><b>No size or lighting normalization</b>: the network must learn to be robust to it. A validation set of 1,500 pairs monitors overfitting.</li>
+</ul>
+<ul class="list fr">
+  <li><b>Personnes du test ≠ personnes de l'entraînement.</b> C'est tout l'intérêt : ça montre que la métrique se généralise à de nouvelles catégories.</li>
+  <li><b>Paires équilibrées.</b> Sur AR/FERET, il y a naturellement environ 155 fois plus de paires impostor que genuine (11 096 376 contre 71 628). L'entraînement utilise 140 000 paires réparties <b>50/50</b> ; sinon le réseau passerait son temps à éloigner et apprendrait mal à rapprocher.</li>
+  <li><b>Pas de normalisation de taille ni de lumière</b> : le réseau doit apprendre à y être robuste. Un ensemble de validation de 1 500 paires surveille le surapprentissage.</li>
+</ul>
+
+<!-- ======================================================= 10 -->
+<h2 id="results"><span class="n">10</span><span class="en">Results</span><span class="fr">Résultats</span></h2>
+<div class="en">
+<p>Two separate phases: <b>training</b> (\(W\) changes, nothing is stored), then <b>use</b> (\(W\) is frozen, and the vectors of known people are stored in a separate database). The network knows no names; the labels live in the database.</p>
+<p><b>Decision rule (section 4.1).</b> The vectors from a person's first five photos give a mean and a covariance: a Gaussian model. For a new photo, \(\rho_\text{genuine}\) is its density under that Gaussian, \(\rho_\text{impostor}\) is a constant estimated on impostor images, and</p>
+</div>
+<div class="fr">
+<p>Deux phases séparées : <b>entraînement</b> (\(W\) bouge, rien n'est stocké), puis <b>utilisation</b> (\(W\) est figé, et les vecteurs des personnes connues sont stockés dans une base à part). Le réseau ne connaît aucun nom ; les étiquettes sont dans la base.</p>
+<p><b>Règle de décision (section 4.1).</b> Les vecteurs des cinq premières photos d'une personne donnent une moyenne et une covariance : un modèle gaussien. Pour une nouvelle photo, \(\rho_\text{genuine}\) est sa densité sous cette gaussienne, \(\rho_\text{impostor}\) une constante estimée sur des images d'imposteurs, et</p>
+</div>
+<div class="eq">\[ P(\text{genuine}) = \frac{\rho_\text{genuine}}{\rho_\text{genuine} + \rho_\text{impostor}} \quad\text{(compared with a threshold)} \]</div>
+<p class="en"><b>FA</b> (false accept) = impostor accepted. <b>FR</b> (false reject) = genuine person rejected. A strict threshold gives low FA but high FR, a loose one the opposite: you cannot bring both to 0. The test set has 500 genuine and 4,500 impostor pairs.</p>
+<p class="fr"><b>FA</b> (faux accepté) = imposteur accepté. <b>FR</b> (faux rejet) = vraie personne refusée. Un seuil strict donne peu de FA mais beaucoup de FR, un seuil large l'inverse : impossible d'annuler les deux. Le test contient 500 paires genuine et 4 500 paires impostor.</p>
+<div class="tw"><table>
+  <tr><th><span class="en">False reject rate when FA =</span><span class="fr">Taux de faux rejets quand FA =</span></th><th class="num">10 %</th><th class="num">7.5 %</th><th class="num">5 %</th></tr>
+  <tr><td>AT&amp;T <span class="en">(test, 5 unseen people)</span><span class="fr">(test, 5 personnes inconnues)</span></td><td class="num">0 %</td><td class="num">1 %</td><td class="num">1 %</td></tr>
+  <tr><td>AR <span class="en">(test, 40 unseen people)</span><span class="fr">(test, 40 personnes inconnues)</span></td><td class="num">11 %</td><td class="num">14.6 %</td><td class="num">19 %</td></tr>
+</table></div>
+<p class="en"><b>How to read it:</b> on AR, if we accept 5% of impostors, we reject 19% of genuine people. AT&amp;T is almost solved; AR is much harder (sunglasses, scarves, lighting). Results are reported as FA/FR and ROC curves, not as a loss curve.</p>
+<p class="fr"><b>Lecture :</b> sur AR, si on accepte 5 % d'imposteurs, on refuse 19 % des vraies personnes. AT&amp;T est presque résolu ; AR est bien plus dur (lunettes de soleil, écharpes, éclairage). Les résultats sont donnés en FA/FR et en courbes ROC, pas en courbe de loss.</p>
+
+<!-- ======================================================= 11 -->
+<h2 id="limits"><span class="n">11</span><span class="en">Critical reading</span><span class="fr">Lecture critique</span></h2>
+<ul class="list en">
+  <li><b>No quantitative comparison</b> with other methods (Eigenfaces, Fisherfaces): we cannot tell whether it is better.</li>
+  <li><b>Small, old datasets</b> and very few test people (5 for AT&amp;T, 40 for AR).</li>
+  <li>The theorem is about <b>energies, not weights</b>: no real guarantee for the optimization.</li>
+  <li>The Gaussian decision needs several photos per person, and estimating a <b>50 × 50 covariance from 5 vectors</b> gives a singular matrix (rank at most 4). The paper does not say how this is handled, and table 1 even mentions 13 images per model for AR. A simple thresholded distance would better match the "few examples per class" goal.</li>
+  <li>The method is <b>supervised</b>: identities are needed to build the pairs.</li>
+</ul>
+<ul class="list fr">
+  <li><b>Aucune comparaison chiffrée</b> avec d'autres méthodes (Eigenfaces, Fisherfaces) : impossible de savoir si c'est mieux.</li>
+  <li><b>Bases petites et anciennes</b>, très peu de personnes de test (5 pour AT&amp;T, 40 pour AR).</li>
+  <li>Le théorème porte sur les <b>énergies, pas sur les poids</b> : aucune vraie garantie pour l'optimisation.</li>
+  <li>La décision gaussienne demande plusieurs photos par personne, et estimer une <b>covariance 50 × 50 avec 5 vecteurs</b> donne une matrice singulière (rang au plus 4). L'article ne dit pas comment c'est géré, et le tableau 1 parle même de 13 images par modèle pour AR. Une simple distance seuillée collerait mieux à l'objectif « peu d'exemples par classe ».</li>
+  <li>La méthode est <b>supervisée</b> : il faut les identités pour former les paires.</li>
+</ul>
+
+<!-- ======================================================= 12 -->
+<h2 id="next"><span class="n">12</span><span class="en">What came next</span><span class="fr">Ce qui a suivi</span></h2>
+<p class="en">"Pull similar things together, push different things apart, and you need the push to avoid collapse." This idea is still at the heart of modern representation learning.</p>
+<p class="fr">« Rapprocher ce qui se ressemble, éloigner ce qui diffère, et il faut éloigner pour éviter le collapse. » Cette idée est toujours au cœur de l'apprentissage de représentations moderne.</p>
+<ul class="tl">
+  <li><span class="y">1993</span><div><b>Bromley et al.</b> <span class="en">Siamese networks for signature verification.</span><span class="fr">Réseaux siamois pour la vérification de signatures.</span></div></li>
+  <li><span class="y here">2005</span><div><b>Chopra, Hadsell &amp; LeCun</b> <span class="en">(this paper). Energy-based contrastive loss, learned invariances, test on unseen people.</span><span class="fr">(cet article). Loss contrastive issue des modèles à énergie, invariances apprises, test sur des personnes inconnues.</span></div></li>
+  <li><span class="y">2006</span><div><b>Hadsell, Chopra &amp; LeCun</b>, <i>Dimensionality Reduction by Learning an Invariant Mapping</i>. <span class="en">The margin-based contrastive loss that became the standard.</span><span class="fr">La loss contrastive à marge, devenue le standard.</span></div></li>
+  <li><span class="y">2015</span><div><b>FaceNet</b> (Schroff et al.). <span class="en">Triplet loss: an anchor must be closer to a positive than to a negative by a margin. 128-D face embeddings at scale.</span><span class="fr">Triplet loss : une ancre doit être plus proche d'un positif que d'un négatif, avec une marge. Embeddings de visages en 128 dimensions, à grande échelle.</span></div></li>
+  <li><span class="y">2020</span><div><b>SimCLR</b> (Chen et al.). <span class="en">Contrastive learning <b>without labels</b>: the positive pair is two augmentations of the same image, the other images of the batch are negatives (InfoNCE loss). Methods like BYOL later avoided explicit negatives with other tricks.</span><span class="fr">Apprentissage contrastif <b>sans étiquettes</b> : la paire positive, ce sont deux augmentations de la même image, les autres images du batch sont les négatifs (loss InfoNCE). Des méthodes comme BYOL ont ensuite évité les négatifs explicites avec d'autres astuces.</span></div></li>
+</ul>
+
+<!-- ======================================================= 13 -->
+<h2 id="quiz"><span class="n">13</span><span class="en">Quiz: did you get it?</span><span class="fr">Quiz : avez-vous compris ?</span></h2>
+<p class="en">8 questions. Score 6 or more and someone will be happy.</p>
+<p class="fr">8 questions. Faites 6 ou plus et quelqu'un sera content.</p>
+<div id="quiz-box"></div>
+<div class="quiz-bar">
+  <button class="btn" id="check" type="button"><span class="en">Check my answers</span><span class="fr">Vérifier mes réponses</span></button>
+  <button class="btn ghost" id="retry" type="button" hidden><span class="en">Try again</span><span class="fr">Recommencer</span></button>
+  <span class="score" id="score" aria-live="polite"></span>
+</div>
+<div id="cat-out" aria-live="polite"><pre id="cat-art"></pre><span class="say" id="cat-say"></span><div class="msg" id="cat-msg"></div></div>
+
+<!-- ======================================================= refs -->
+<h2 id="refs"><span class="en">References</span><span class="fr">Références</span></h2>
+<ul class="list refs">
+  <li>S. Chopra, R. Hadsell, Y. LeCun. <i>Learning a Similarity Metric Discriminatively, with Application to Face Verification.</i> CVPR 2005. <a href="http://yann.lecun.com/exdb/publis/pdf/chopra-05.pdf" target="_blank" rel="noopener">pdf</a></li>
+  <li>J. Bromley, I. Guyon, Y. LeCun, E. Säckinger, R. Shah. <i>Signature Verification using a "Siamese" Time Delay Neural Network.</i> NIPS 1993.</li>
+  <li>Y. LeCun, F. J. Huang. <i>Loss Functions for Discriminative Training of Energy-Based Models.</i> AISTATS 2005.</li>
+  <li>R. Hadsell, S. Chopra, Y. LeCun. <i>Dimensionality Reduction by Learning an Invariant Mapping.</i> CVPR 2006.</li>
+  <li>F. Schroff, D. Kalenichenko, J. Philbin. <i>FaceNet: A Unified Embedding for Face Recognition and Clustering.</i> CVPR 2015.</li>
+  <li>T. Chen, S. Kornblith, M. Norouzi, G. Hinton. <i>A Simple Framework for Contrastive Learning of Visual Representations.</i> ICML 2020.</li>
+</ul>
+<p class="en" style="font-size:15px;color:var(--dim)">BibTeX entry, to cite the paper in LaTeX:</p>
+<p class="fr" style="font-size:15px;color:var(--dim)">Entrée BibTeX, pour citer l'article dans LaTeX :</p>
+<div class="cite">@inproceedings{chopra2005learning,
+  title     = {Learning a Similarity Metric Discriminatively, with Application to Face Verification},
+  author    = {Chopra, Sumit and Hadsell, Raia and LeCun, Yann},
+  booktitle = {IEEE Conference on Computer Vision and Pattern Recognition (CVPR)},
+  year      = {2005}
+}</div>
+
+<footer>
+  <span><span class="en">Notes by <a href="../">Eyub Celebioglu</a>, written while studying contrastive learning (M.Sc. AI, Vision &amp; Robotics). Spotted a mistake? <a href="mailto:eyub.celebioglu@gmail.com">Tell me</a>.</span><span class="fr">Notes d'<a href="../">Eyub Celebioglu</a>, écrites en révisant l'apprentissage contrastif (Master IA, Vision &amp; Robotique). Une erreur ? <a href="mailto:eyub.celebioglu@gmail.com">Dites-le-moi</a>.</span></span>
+  <span class="mono">=^.^=</span>
+</footer>
+</div>
+
+<script>
+const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const lang = () => document.documentElement.lang;
+
+/* ---------- language switch ---------- */
+const TITLES = {
+  en: 'Siamese networks & contrastive loss (Chopra, Hadsell & LeCun, 2005) · Eyub Celebioglu',
+  fr: 'Réseaux siamois et loss contrastive (Chopra, Hadsell & LeCun, 2005) · Eyub Celebioglu'
+};
+const langHooks = [];
+function setLang(l){
+  document.documentElement.lang = l;
+  document.title = TITLES[l];
+  document.querySelectorAll('.lang button').forEach(b => b.setAttribute('aria-pressed', b.dataset.l === l));
+  try { localStorage.setItem('lang', l); } catch (e) {}
+  langHooks.forEach(f => f());
+}
+document.querySelectorAll('.lang button').forEach(b => b.onclick = () => setLang(b.dataset.l));
+setLang(lang());
+
+/* ---------- maths ---------- */
+addEventListener('DOMContentLoaded', () => {
+  if (window.renderMathInElement) renderMathInElement(document.body, {
+    delimiters: [{left:'\\[', right:'\\]', display:true}, {left:'\\(', right:'\\)', display:false}],
+    throwOnError: false
+  });
+});
+
+/* ---------- canvas helper ---------- */
+function fit(cv){
+  const d = devicePixelRatio || 1, r = cv.getBoundingClientRect();
+  cv.width = Math.round(r.width * d); cv.height = Math.round(r.height * d);
+  const g = cv.getContext('2d'); g.setTransform(d, 0, 0, d, 0, 0);
+  return [g, r.width, r.height];
+}
+
+/* ---------- interactive demo: a tiny siamese model trained live ---------- */
+(() => {
+  // toy "faces": 8-D vectors = identity + lighting/pose nuisance + noise; G_W = linear map 8 -> 2
+  const D = 8, K = 4, KU = 2, N = 6, NUIS = 1.0, NOISE = 0.6, M = 1.5, LR = 0.03, B = 32, VIEW = 2.4, HIST = 900;
+  const COL = ['#1f5fae', '#c8372d', '#2a8a57', '#b07a12', '#7b4fb0', '#2b8c9e'];
+  const emb = document.getElementById('emb'), chart = document.getElementById('chart');
+  const playB = document.getElementById('play'), contr = document.getElementById('contr'), unseenB = document.getElementById('unseen');
+  const readout = document.getElementById('readout');
+  let rnd, ids, W, steps, hist, stride, running = false, started = false, visible = false;
+
+  function mulberry32(a){ return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+  const randn = () => { let u = 0; while (!u) u = rnd(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * rnd()); };
+  const unit = () => { const v = Array.from({length: D}, randn), n = Math.hypot(...v); return v.map(x => x / n); };
+
+  function init(seed){
+    rnd = mulberry32(seed);
+    const u1 = unit(), u2 = unit();
+    ids = [];
+    for (let k = 0; k < K + KU; k++){
+      const base = Array.from({length: D}, randn);
+      ids.push(Array.from({length: N}, () => {
+        const a = randn() * NUIS, c = randn() * NUIS;
+        return base.map((x, j) => x + a * u1[j] + c * u2[j] + randn() * NOISE);
+      }));
+    }
+    W = [0, 1].map(() => Array.from({length: D}, () => randn() * 0.15));
+    steps = 0; hist = []; stride = 1;
+    record();
+  }
+  const G = x => [0, 1].map(i => W[i].reduce((s, w, j) => s + w * x[j], 0));
+  const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+
+  // one SGD step on a batch of pairs: L = (1-Y) ½D² + Y ½max(0, m-D)²
+  function step(){
+    const grad = [new Array(D).fill(0), new Array(D).fill(0)], useImp = contr.checked;
+    for (let p = 0; p < B; p++){
+      const imp = useImp && p % 2 === 1;          // balanced 50/50, as in the paper
+      const k1 = rnd() * K | 0; let k2 = k1;
+      if (imp){ k2 = rnd() * (K - 1) | 0; if (k2 >= k1) k2++; }
+      const i1 = rnd() * N | 0; let i2 = rnd() * N | 0; if (!imp && i2 === i1) i2 = (i1 + 1) % N;
+      const x1 = ids[k1][i1], x2 = ids[k2][i2], y1 = G(x1), y2 = G(x2), d = dist(y1, y2) + 1e-9;
+      const dLdD = imp ? (d < M ? -(M - d) : 0) : d;
+      for (let i = 0; i < 2; i++){
+        const c = dLdD * (y1[i] - y2[i]) / d;
+        for (let j = 0; j < D; j++) grad[i][j] += c * (x1[j] - x2[j]);
+      }
+    }
+    for (let i = 0; i < 2; i++) for (let j = 0; j < D; j++) W[i][j] -= LR * grad[i][j] / B;
+    steps++;
+  }
+  function meanDist(lo, hi){
+    let eg = 0, ng = 0, ei = 0, ni = 0;
+    const Y = ids.map(id => id.map(G));
+    for (let k = lo; k < hi; k++) for (let a = 0; a < N; a++){
+      for (let b = a + 1; b < N; b++){ eg += dist(Y[k][a], Y[k][b]); ng++; }
+      for (let l = k + 1; l < hi; l++) for (let b = 0; b < N; b++){ ei += dist(Y[k][a], Y[l][b]); ni++; }
+    }
+    return [eg / ng, ei / ni];
+  }
+  // keep the whole run on the chart: when full, drop every other point and sample half as often
+  function record(){
+    if (steps % stride) return;
+    hist.push(meanDist(0, K));
+    if (hist.length > HIST){ hist = hist.filter((_, i) => i % 2 === 0); stride *= 2; }
+  }
+
+  function drawEmb(){
+    const [g, w, h] = fit(emb), s = w / (2 * VIEW), X = v => w / 2 + v * s, Yp = v => h / 2 - v * s;
+    g.clearRect(0, 0, w, h);
+    g.strokeStyle = '#eeeef1'; g.lineWidth = 1; g.beginPath();
+    g.moveTo(w / 2, 0); g.lineTo(w / 2, h); g.moveTo(0, h / 2); g.lineTo(w, h / 2); g.stroke();
+    const n = unseenB.checked ? K + KU : K;
+    for (let k = 0; k < n; k++) for (const x of ids[k]){
+      const y = G(x), px = Math.max(6, Math.min(w - 6, X(y[0]))), py = Math.max(6, Math.min(h - 6, Yp(y[1])));
+      g.beginPath(); g.arc(px, py, k < K ? 5 : 5.5, 0, 7);
+      if (k < K){ g.fillStyle = COL[k]; g.globalAlpha = .85; g.fill(); g.globalAlpha = 1; }
+      else { g.strokeStyle = COL[k]; g.lineWidth = 2; g.stroke(); }
+    }
+    if (!contr.checked && hist.length && hist[hist.length - 1][1] < .15){
+      g.fillStyle = '#c8372d'; g.font = '13px "JetBrains Mono", monospace'; g.textAlign = 'center';
+      g.fillText(lang() === 'fr' ? 'collapse : tout au même point' : 'collapse: everything in one point', w / 2, 22);
+    }
+  }
+  function drawChart(){
+    const [g, w, h] = fit(chart), pad = 30, top = 14, ymax = 3.2;
+    const X = i => pad + (w - pad - 10) * i / Math.max(HIST / 2, hist.length - 1), Yp = v => top + (h - top - 26) * (1 - Math.min(v, ymax) / ymax);
+    g.clearRect(0, 0, w, h);
+    g.strokeStyle = '#d4d4da'; g.lineWidth = 1; g.beginPath(); g.moveTo(pad, top); g.lineTo(pad, h - 26); g.lineTo(w - 10, h - 26); g.stroke();
+    g.fillStyle = '#9a9aa0'; g.font = '11px "JetBrains Mono", monospace'; g.textAlign = 'right';
+    [0, 1, 2, 3].forEach(v => g.fillText(v, pad - 6, Yp(v) + 4));
+    g.setLineDash([4, 4]); g.strokeStyle = '#b4b4ba'; g.beginPath(); g.moveTo(pad, Yp(M)); g.lineTo(w - 10, Yp(M)); g.stroke(); g.setLineDash([]);
+    g.textAlign = 'left'; g.fillText('m', w - 22, Yp(M) - 5);
+    g.fillText(lang() === 'fr' ? 'pas d’entraînement →' : 'training steps →', pad + 4, h - 9);
+    [[0, '#1f5fae'], [1, '#c8372d']].forEach(([c, col]) => {
+      g.strokeStyle = col; g.lineWidth = 2; g.beginPath();
+      hist.forEach((v, i) => i ? g.lineTo(X(i), Yp(v[c])) : g.moveTo(X(i), Yp(v[c])));
+      g.stroke();
+    });
+  }
+  function drawReadout(){
+    const [eg, ei] = meanDist(0, K), fr = lang() === 'fr', f = v => v.toFixed(2);
+    let s = `${fr ? 'pas' : 'step'} ${steps} · <span class="g">E_G ${fr ? '(même personne)' : '(same person)'} = ${f(eg)}</span> · <span class="i">E_I ${fr ? '(personnes différentes)' : '(different people)'} = ${f(ei)}</span>`;
+    if (unseenB.checked){ const [ug, ui] = meanDist(K, K + KU); s += `<br>${fr ? 'personnes jamais vues' : 'unseen people'}: E_G = ${f(ug)} · E_I = ${f(ui)}`; }
+    readout.innerHTML = s;
+  }
+  function draw(){ drawEmb(); drawChart(); drawReadout(); }
+  function setPlay(on){
+    running = on;
+    playB.textContent = on ? '❚❚ Pause' : lang() === 'fr' ? '▶ Entraîner' : '▶ Train';
+    if (on) requestAnimationFrame(loop);
+  }
+  function loop(){
+    if (!running) return;
+    if (visible){ for (let t = 0; t < 2; t++){ step(); record(); } draw(); }
+    requestAnimationFrame(loop);
+  }
+  playB.onclick = () => setPlay(!running);
+  document.getElementById('reset').onclick = () => { init((Math.random() * 1e9) | 0); draw(); if (!running) setPlay(true); };
+  contr.onchange = unseenB.onchange = () => draw();
+  langHooks.push(() => { setPlay(running); draw(); });
+  new IntersectionObserver(es => {
+    visible = es[0].isIntersecting;
+    if (visible && !started){ started = true; if (!reduced) setPlay(true); }
+  }, {threshold: .35}).observe(emb);
+  let rz; addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(draw, 150); });
+
+  init(3);                       // a seed that gives a clean first run
+  setPlay(false); draw();
+})();
+
+/* ---------- loss shapes: 2005 vs 2006 ---------- */
+const lossCv = document.getElementById('lossplot');
+let lossV = '2005';
+function drawLoss(){
+  const [g, w, h] = fit(lossCv), pl = 34, pb = 26, pt = 12, pr = 12;
+  const Q = 2, m = 1, xmax = 2;
+  const LG = lossV === '2005' ? E => (2 / Q) * E * E : E => .5 * E * E;
+  const LI = lossV === '2005' ? E => 2 * Q * Math.exp(-2.77 * E / Q) : E => .5 * Math.max(0, m - E) ** 2;
+  const ymax = lossV === '2005' ? 4.2 : 2.1;
+  const X = e => pl + (w - pl - pr) * e / xmax, Y = v => pt + (h - pt - pb) * (1 - v / ymax);
+  g.clearRect(0, 0, w, h);
+  g.strokeStyle = '#d4d4da'; g.lineWidth = 1; g.beginPath(); g.moveTo(pl, pt); g.lineTo(pl, h - pb); g.lineTo(w - pr, h - pb); g.stroke();
+  g.fillStyle = '#9a9aa0'; g.font = '11px "JetBrains Mono", monospace'; g.textAlign = 'center';
+  [0, .5, 1, 1.5, 2].forEach(e => g.fillText(e, X(e), h - pb + 15));
+  g.textAlign = 'right'; g.fillText('L', pl - 8, pt + 8);
+  if (lossV === '2006'){
+    g.setLineDash([4, 4]); g.strokeStyle = '#b4b4ba'; g.beginPath(); g.moveTo(X(m), pt); g.lineTo(X(m), h - pb); g.stroke(); g.setLineDash([]);
+    g.textAlign = 'left'; g.fillText('m', X(m) + 5, pt + 10);
+  } else {
+    g.textAlign = 'right'; g.fillText('E = Q', w - pr, pt + 10);
+  }
+  [[LG, '#1f5fae'], [LI, '#c8372d']].forEach(([f, c]) => {
+    g.strokeStyle = c; g.lineWidth = 2.2; g.beginPath();
+    for (let i = 0; i <= 200; i++){ const e = xmax * i / 200, y = Y(Math.min(f(e), ymax)); i ? g.lineTo(X(e), y) : g.moveTo(X(e), y); }
+    g.stroke();
+  });
+}
+let rzLoss; addEventListener('resize', () => { clearTimeout(rzLoss); rzLoss = setTimeout(drawLoss, 150); });
+document.querySelectorAll('.seg button').forEach(b => b.onclick = () => {
+  lossV = b.dataset.v;
+  document.querySelectorAll('.seg button').forEach(x => x.setAttribute('aria-pressed', x === b));
+  drawLoss();
+});
+drawLoss();
+
+/* ---------- quiz ---------- */
+const QUIZ = [
+  { q: ['Why is a standard classifier a bad fit for face verification?', 'Pourquoi un classifieur classique convient mal à la vérification de visages ?'],
+    o: [['Classifiers cannot use convolutional networks.', 'Un classifieur ne peut pas utiliser de réseau convolutif.'],
+        ['There are many people, few photos of each, and new people appear after training.', 'Il y a beaucoup de personnes, peu de photos de chacune, et de nouvelles personnes après l’entraînement.'],
+        ['Classifiers need labels, while siamese networks do not.', 'Un classifieur a besoin d’étiquettes, pas un réseau siamois.'],
+        ['Classifiers are too slow at test time.', 'Un classifieur est trop lent au moment du test.']],
+    a: 1, s: '#problem',
+    e: ['One output neuron per class needs all classes known in advance with many examples each. Note: the siamese method is also supervised (identities are needed to build pairs).', 'Un neurone par classe exige de connaître toutes les classes à l’avance, avec beaucoup d’exemples. Attention : la méthode siamoise est aussi supervisée (il faut les identités pour former les paires).'] },
+  { q: ['What does "siamese" mean here?', 'Que veut dire « siamois » ici ?'],
+    o: [['Two different networks trained together, one per image.', 'Deux réseaux différents entraînés ensemble, un par image.'],
+        ['One network per person in the database.', 'Un réseau par personne de la base.'],
+        ['The same network, with the same weights W, applied to both images.', 'Le même réseau, avec les mêmes poids W, appliqué aux deux images.'],
+        ['A network whose two halves process the left and right side of the face.', 'Un réseau dont les deux moitiés traitent le côté gauche et le côté droit du visage.']],
+    a: 2, s: '#idea',
+    e: ['Shared weights put both images in the same space and make the energy symmetric. In code, you call one network twice.', 'Les poids partagés mettent les deux images dans le même espace et rendent l’énergie symétrique. Dans le code, on appelle un seul réseau deux fois.'] },
+  { q: ['What happens if we only minimize E_W on genuine pairs?', 'Que se passe-t-il si on minimise E_W seulement sur les paires genuine ?'],
+    o: [['Collapse: G_W becomes constant, every distance is 0, nobody can be told apart.', 'Collapse : G_W devient constante, toutes les distances valent 0, on ne distingue plus personne.'],
+        ['Overfitting on the training people.', 'Du surapprentissage sur les personnes d’entraînement.'],
+        ['The energies explode to infinity.', 'Les énergies explosent vers l’infini.'],
+        ['Nothing special: it works, just more slowly.', 'Rien de spécial : ça marche, juste plus lentement.']],
+    a: 0, s: '#collapse',
+    e: ['A constant function gives loss 0 for free. The contrastive term (impostor pairs) forbids this shortcut. You can watch it in the demo.', 'Une fonction constante donne une loss nulle gratuitement. Le terme contrastif (paires impostor) interdit ce raccourci. On le voit dans la démo.'] },
+  { q: ['Which inequality is Condition 1?', 'Quelle inégalité est la condition 1 ?'],
+    o: [['E_G < m', 'E_G < m'], ['E_G + E_I < m', 'E_G + E_I < m'], ['E_G + m < E_I', 'E_G + m < E_I'], ['E_I < E_G + m', 'E_I < E_G + m']],
+    a: 2, s: '#loss',
+    e: ['A genuine pair must be closer than an impostor pair by at least the margin m.', 'Une paire genuine doit être plus proche qu’une paire impostor, d’au moins la marge m.'] },
+  { q: ['Why does the paper use the norm and not the squared norm for the energy?', 'Pourquoi l’article utilise-t-il la norme et pas la norme au carré pour l’énergie ?'],
+    o: [['The squared norm is slower to compute.', 'La norme au carré est plus lente à calculer.'],
+        ['With the squared norm, the gradient vanishes when outputs are close, so confused impostor pairs would barely be pushed apart.', 'Avec la norme au carré, le gradient s’annule quand les sorties sont proches : les paires impostor confondues ne seraient presque plus repoussées.'],
+        ['The squared norm would make the loss non-convex.', 'La norme au carré rendrait la loss non convexe.'],
+        ['The squared norm is not symmetric.', 'La norme au carré n’est pas symétrique.']],
+    a: 1, s: '#details',
+    e: ['Like x² near 0: almost flat. That plateau would stall learning exactly where it is needed most.', 'Comme x² près de 0 : presque plat. Ce plateau bloquerait l’apprentissage là où on en a le plus besoin.'] },
+  { q: ['Why are the test people different from the training people?', 'Pourquoi les personnes du test sont-elles différentes de celles de l’entraînement ?'],
+    o: [['To have more training data.', 'Pour avoir plus de données d’entraînement.'],
+        ['Because the datasets are too small otherwise.', 'Parce que sinon les bases sont trop petites.'],
+        ['To prove that the learned distance generalizes to new people, which is the goal of the method.', 'Pour prouver que la distance apprise se généralise à de nouvelles personnes, ce qui est l’objectif de la méthode.'],
+        ['To balance genuine and impostor pairs.', 'Pour équilibrer les paires genuine et impostor.']],
+    a: 2, s: '#data',
+    e: ['The whole point is to verify people the system has never seen. Tick "show people never seen" in the demo.', 'Tout l’intérêt est de vérifier des personnes jamais vues. Cochez « montrer des personnes jamais vues » dans la démo.'] },
+  { q: ['What does Theorem 1 guarantee?', 'Que garantit le théorème 1 ?'],
+    o: [['Gradient descent on W always finds the global minimum.', 'La descente de gradient sur W trouve toujours le minimum global.'],
+        ['The network reaches 0% error on unseen people.', 'Le réseau atteint 0 % d’erreur sur les personnes inconnues.'],
+        ['The loss is convex in the weights W.', 'La loss est convexe en les poids W.'],
+        ['If H is convex in (E_G, E_I), its minimum satisfies Condition 1; nothing is said about optimizing W.', 'Si H est convexe en (E_G, E_I), son minimum vérifie la condition 1 ; rien n’est dit sur l’optimisation de W.']],
+    a: 3, s: '#theorem',
+    e: ['Convex in the energies, not in the weights. The theorem says the loss pushes in the right direction, not that SGD gets there.', 'Convexe en les énergies, pas en les poids. Le théorème dit que la loss pousse dans la bonne direction, pas que SGD y arrive.'] },
+  { q: ['On AR, FR = 19% when FA = 5%. What does it mean?', 'Sur AR, FR = 19 % quand FA = 5 %. Qu’est-ce que ça veut dire ?'],
+    o: [['If we accept 5% of impostors, we reject 19% of genuine people.', 'Si on accepte 5 % d’imposteurs, on refuse 19 % des vraies personnes.'],
+        ['19% of impostors are accepted.', '19 % des imposteurs sont acceptés.'],
+        ['The accuracy is 19%.', 'La précision est de 19 %.'],
+        ['The loss is 0.19 at the end of training.', 'La loss vaut 0,19 à la fin de l’entraînement.']],
+    a: 0, s: '#results',
+    e: ['FA and FR trade off through the threshold; you cannot bring both to 0.', 'FA et FR s’échangent via le seuil ; impossible d’annuler les deux.'] }
+];
+const qBox = document.getElementById('quiz-box');
+const bi = (en, fr) => `<span class="en">${en}</span><span class="fr">${fr}</span>`;
+const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+qBox.innerHTML = QUIZ.map((x, i) => `
+  <div class="q" id="q${i}">
+    <div class="qt"><span class="qn">${i + 1}/${QUIZ.length}</span>${bi(esc(x.q[0]), esc(x.q[1]))}</div>
+    <div class="opts">${x.o.map((o, j) => `<label class="opt"><input type="radio" name="q${i}" value="${j}"><span>${bi(esc(o[0]), esc(o[1]))}</span></label>`).join('')}</div>
+    <div class="fb"></div>
+  </div>`).join('');
+
+const CAT = eyes => String.raw`   /\_____/\
+  /  ${eyes}  \
+ ( ==  ^  == )
+  )         (
+ (           )
+( (  )   (  ) )
+(__(__)___(__)__)`;
+const catOut = document.getElementById('cat-out'), catArt = document.getElementById('cat-art'), catSay = document.getElementById('cat-say'), catMsg = document.getElementById('cat-msg');
+let sayT;
+function showCat(score){
+  clearInterval(sayT);
+  const n = QUIZ.length, good = score >= 6, fr = lang() === 'fr';
+  catArt.innerHTML = CAT(good ? '<span class="hl">^</span>   <span class="hl">^</span>' : '<span class="hl">-</span>   <span class="hl">-</span>');
+  catOut.classList.add('on'); catOut.classList.remove('hop');
+  if (good){
+    void catOut.offsetWidth;   // force a reflow so the hop animation restarts
+    catOut.classList.add('hop');
+    const full = score === n ? 'nyaaaaaaa~ ♡' : 'nyaaa~';
+    let k = 0; catSay.textContent = '';
+    sayT = setInterval(() => { catSay.textContent = full.slice(0, ++k); if (k >= full.length) clearInterval(sayT); }, reduced ? 0 : 90);
+    catMsg.innerHTML = score === n
+      ? bi('Perfect score. You are ready for the exam.', 'Sans faute. Vous êtes prêt·e pour l’examen.')
+      : bi('Well done! Check the explanations above for the ones you missed.', 'Bien joué ! Regardez les explications au-dessus pour celles que vous avez ratées.');
+  } else {
+    catSay.textContent = 'zzz…';
+    catMsg.innerHTML = bi('The cat fell asleep. Re-read the linked sections and try again: you need 6/8 to wake it up.', 'Le chat s’est endormi. Relisez les sections indiquées et recommencez : il faut 6/8 pour le réveiller.');
+  }
+}
+document.getElementById('check').onclick = () => {
+  let score = 0, missing = 0;
+  QUIZ.forEach((x, i) => { if (!document.querySelector(`input[name=q${i}]:checked`)) missing++; });
+  if (missing){
+    document.getElementById('score').innerHTML = bi(`${missing} question(s) left`, `il reste ${missing} question(s)`);
+    return;
+  }
+  QUIZ.forEach((x, i) => {
+    const el = document.getElementById('q' + i), pick = +document.querySelector(`input[name=q${i}]:checked`).value, ok = pick === x.a;
+    if (ok) score++;
+    el.classList.add('done');
+    el.querySelectorAll('.opt').forEach((o, j) => { o.classList.toggle('right', j === x.a); o.classList.toggle('wrong', j === pick && !ok); o.querySelector('input').disabled = true; });
+    el.querySelector('.fb').innerHTML = (ok ? '✓ ' : '✗ ') + bi(esc(x.e[0]), esc(x.e[1])) + ` <a href="${x.s}">↑ section</a>`;
+  });
+  document.getElementById('score').textContent = `${score} / ${QUIZ.length}`;
+  document.getElementById('check').hidden = true;
+  document.getElementById('retry').hidden = false;
+  showCat(score);
+};
+document.getElementById('retry').onclick = () => {
+  QUIZ.forEach((x, i) => {
+    const el = document.getElementById('q' + i); el.classList.remove('done');
+    el.querySelectorAll('.opt').forEach(o => { o.classList.remove('right', 'wrong'); const r = o.querySelector('input'); r.disabled = false; r.checked = false; });
+  });
+  document.getElementById('score').textContent = '';
+  document.getElementById('check').hidden = false;
+  document.getElementById('retry').hidden = true;
+  catOut.classList.remove('on'); clearInterval(sayT);
+  document.getElementById('quiz').scrollIntoView();
+};
+</script>
+</body>
+</html>
